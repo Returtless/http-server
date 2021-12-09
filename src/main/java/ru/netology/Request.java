@@ -10,22 +10,29 @@ import java.io.InputStreamReader;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
+import static org.apache.http.entity.ContentType.APPLICATION_FORM_URLENCODED;
 
 public class Request {
     private final String method;
     private final String path;
     private final Map<String, String> headers;
     private final List<NameValuePair> queryParams;
+    private final List<NameValuePair> postParams;
     private final InputStream in;
 
-    private Request(String method, String path, Map<String, String> headers, List<NameValuePair> queryParams, InputStream in) {
+    public static String CONTENT_LENGTH_HEADER = "Content-Length";
+    public static String CONTENT_TYPE_HEADER = "Content-Type";
+    private Request(String method, String path, Map<String, String> headers, List<NameValuePair> queryParams, List<NameValuePair> postParams, InputStream in) {
         this.method = method;
         this.path = path;
         this.headers = headers;
         this.queryParams = queryParams;
+        this.postParams = postParams;
         this.in = in;
     }
 
@@ -42,12 +49,21 @@ public class Request {
         return queryParams;
     }
 
+    public NameValuePair getPostParam(String name) {
+        return postParams.stream().filter(nameValuePair -> nameValuePair.getName().equals(name)).findAny().orElse(null);
+    }
+
+    public List<NameValuePair> getPostParams() {
+        return postParams;
+    }
+
     public NameValuePair getQueryParam(String name) {
         return queryParams.stream().filter(nameValuePair -> nameValuePair.getName().equals(name)).findAny().orElse(null);
     }
 
     public static Request fromInputStream(InputStream inputStream) throws IOException, URISyntaxException {
         final var in = new BufferedReader(new InputStreamReader(inputStream));
+
         final var requestLine = in.readLine();
 
         final var parts = requestLine.split(" ");
@@ -65,6 +81,17 @@ public class Request {
             headers.put(lineParts[0], lineParts[1]);
         }
 
-        return new Request(parts[0], uri.getPath(), headers, params, inputStream);
+        List<NameValuePair> postParams = new ArrayList<>();
+        final var contentLength = headers.get(CONTENT_LENGTH_HEADER);
+
+        if (APPLICATION_FORM_URLENCODED.getMimeType().equals(headers.get(CONTENT_TYPE_HEADER).trim()) && !contentLength.isBlank()) {
+            final var length = Integer.parseInt(contentLength.trim());
+            char[] charArray = new char[length];
+            in.read(charArray, 0, length);
+            final String body = new String(charArray);
+            postParams = URLEncodedUtils.parse(body, StandardCharsets.UTF_8);
+        }
+
+        return new Request(parts[0], uri.getPath(), headers, params, postParams, inputStream);
     }
 }
