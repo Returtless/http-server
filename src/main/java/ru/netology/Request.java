@@ -83,13 +83,17 @@ public class Request {
 
         List<NameValuePair> postParams = new ArrayList<>();
         final var contentLength = headers.get(CONTENT_LENGTH_HEADER);
-
-        if (APPLICATION_FORM_URLENCODED.getMimeType().equals(headers.get(CONTENT_TYPE_HEADER).trim()) && !contentLength.isBlank()) {
-            final var length = Integer.parseInt(contentLength.trim());
-            char[] charArray = new char[length];
-            in.read(charArray, 0, length);
-            final String body = new String(charArray);
-            postParams = URLEncodedUtils.parse(body, StandardCharsets.UTF_8);
+        final var contentType = headers.get(CONTENT_TYPE_HEADER);
+        if (contentType != null && contentLength != null && APPLICATION_FORM_URLENCODED.getMimeType().equals(contentType.trim())) {
+            try {
+                final var length = Integer.parseInt(contentLength.trim());
+                char[] charArray = new char[length];
+                in.read(charArray, 0, length);
+                final String body = new String(charArray);
+                postParams = URLEncodedUtils.parse(body, StandardCharsets.UTF_8);
+            } catch (NumberFormatException e) {
+                System.out.println("Parse parameters error");
+            }
         }
 
         return new Request(parts[0], uri.getPath(), headers, params, postParams, inputStream);
